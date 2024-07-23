@@ -3,57 +3,68 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
-type WeatherConfig struct {
-	APIKey string `json:"api_key"`
-	City   string `json:"city"`
-}
-
-type WeatherResponse struct {
-	Main struct {
-		Temp     float64 `json:"temp"`
-		Humidity int     `json:"humidity"`
-	} `json:"main"`
-	Name string `json:"name"`
-}
-
 type WeatherData struct {
-	City      string    `json:"city"`
-	Temp      float64   `json:"temp"`
-	Humidity  int       `json:"humidity"`
-	Timestamp time.Time `json:"timestamp"`
+	Location struct {
+		Name    string `json:"name"`
+		Country string `json:"country"`
+	} `json:"location"`
+	Current struct {
+		TempC float64 `json:"temp_c"`
+		TempF float64 `json:"temp_f"`
+	} `json:"current"`
+	Forecast struct {
+		Forecastday []ForecastDay `json:"forecastday"`
+	} `json:"forecast"`
+}
+
+type ForecastDay struct {
+	Date string `json:"date"`
+	Day  struct {
+		MaxTempC float64 `json:"maxtemp_c"`
+		MinTempC float64 `json:"mintemp_c"`
+		AvgTempC float64 `json:"avgtemp_c"`
+	} `json:"day"`
+	Hour []HourData `json:"hour"`
+}
+
+type HourData struct {
+	TimeEpoch int64   `json:"time_epoch"`
+	TempC     float64 `json:"temp_c"`
+	TempF     float64 `json:"temp_f"`
+}
+
+type WeatherAnalyzer struct {
+	data     *WeatherData
+	location string
 }
 
 func main() {
-	// Load configuration
-	config, err := loadConfig("config.json")
-	if err != nil {
-		log.Fatal("Error loading config:", err)
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: go run main.go <location>")
+		fmt.Println("Example: go run main.go London")
+		return
 	}
 
-	// Fetch current weather
-	weather, err := fetchWeatherData(config)
+	location := strings.Join(os.Args[1:], " ")
+	
+	fmt.Printf("🌤️  Fetching weather data for: %s\n", location)
+	
+	weatherData, err := fetchWeatherData(location)
 	if err != nil {
-		log.Fatal("Error fetching weather data:", err)
+		log.Fatalf("Error fetching weather data: %v", err)
 	}
 
-	// Store the data
-	err = storeWeatherData(weather)
-	if err != nil {
-		log.Fatal("Error storing weather data:", err)
-	}
-
-	// Analyze and visualize trends
-	err = analyzeAndVisualize()
-	if err != nil {
-		log.Fatal("Error analyzing data:", err)
-	}
-
-	fmt.Printf("Weather data processed successfully!\n")
-	fmt.Printf("Current temperature in %s: %.1f°C\n", weather.City, weather.Temp)
+	analyzer := NewWeatherAnalyzer(weatherData, location)
+	analyzer.DisplayCurrentWeather()
+	analyzer.AnalyzeTrends()
+	analyzer.GenerateVisualization()
 }
