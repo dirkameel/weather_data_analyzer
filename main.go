@@ -11,108 +11,48 @@ import (
 	"time"
 )
 
-type WeatherData struct {
-	Location struct {
-		Name    string `json:"name"`
-		Country string `json:"country"`
-	} `json:"location"`
-	Current struct {
-		TempC float64 `json:"temp_c"`
-		TempF float64 `json:"temp_f"`
-	} `json:"current"`
+type WeatherResponse struct {
+	Main struct {
+		Temp     float64 `json:"temp"`
+		Humidity int     `json:"humidity"`
+	} `json:"main"`
+	Name string `json:"name"`
 }
 
-type WeatherAnalysis struct {
-	Location    string
-	Temperature float64
-	Timestamp   time.Time
-	Trend       string
+type WeatherData struct {
+	City      string    `json:"city"`
+	Temp      float64   `json:"temp"`
+	Humidity  int       `json:"humidity"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go <city_name>")
-		fmt.Println("Example: go run main.go London")
-		return
+		fmt.Println("Usage: go run main.go <city1> <city2> ...")
+		fmt.Println("Example: go run main.go London Tokyo NewYork")
+		os.Exit(1)
 	}
 
-	city := os.Args[1]
-	
-	// Fetch current weather
-	weather, err := fetchWeather(city)
-	if err != nil {
-		log.Fatalf("Error fetching weather: %v", err)
+	cities := os.Args[1:]
+	fmt.Printf("Fetching weather data for: %v\n", cities)
+
+	// Fetch current weather data
+	var weatherData []WeatherData
+	for _, city := range cities {
+		data, err := fetchCurrentWeather(city)
+		if err != nil {
+			log.Printf("Error fetching data for %s: %v", city, err)
+			continue
+		}
+		weatherData = append(weatherData, data)
 	}
 
-	// Analyze and display results
-	analysis := analyzeWeather(weather)
-	displayResults(analysis)
-	
-	// Generate visualization
-	generateVisualization(analysis)
-}
-
-func fetchWeather(city string) (*WeatherData, error) {
-	apiKey := os.Getenv("WEATHER_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("WEATHER_API_KEY environment variable not set")
+	// Save data to file
+	if err := saveWeatherData(weatherData); err != nil {
+		log.Fatalf("Error saving weather data: %v", err)
 	}
 
-	url := fmt.Sprintf("http://api.weatherapi.com/v1/current.json?key=%s&q=%s&aqi=no", apiKey, city)
-	
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed with status: %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var weather WeatherData
-	err = json.Unmarshal(body, &weather)
-	if err != nil {
-		return nil, err
-	}
-
-	return &weather, nil
-}
-
-func analyzeWeather(weather *WeatherData) *WeatherAnalysis {
-	analysis := &WeatherAnalysis{
-		Location:    fmt.Sprintf("%s, %s", weather.Location.Name, weather.Location.Country),
-		Temperature: weather.Current.TempC,
-		Timestamp:   time.Now(),
-	}
-
-	// Simple trend analysis based on temperature
-	if weather.Current.TempC < 0 {
-		analysis.Trend = "❄️ Freezing"
-	} else if weather.Current.TempC < 10 {
-		analysis.Trend = "🥶 Cold"
-	} else if weather.Current.TempC < 20 {
-		analysis.Trend = "😊 Mild"
-	} else if weather.Current.TempC < 30 {
-		analysis.Trend = "☀️ Warm"
-	} else {
-		analysis.Trend = "🔥 Hot"
-	}
-
-	return analysis
-}
-
-func displayResults(analysis *WeatherAnalysis) {
-	fmt.Println("\n🌤️  WEATHER ANALYSIS REPORT")
-	fmt.Println("============================")
-	fmt.Printf("Location:    %s\n", analysis.Location)
-	fmt.Printf("Temperature: %.1f°C (%.1f°F)\n", analysis.Temperature, analysis.Temperature*9/5+32)
-	fmt.Printf("Condition:   %s\n", analysis.Trend)
-	fmt.Printf("Time:        %s\n", analysis.Timestamp.Format("2006-01-02 15:04:05"))
-	fmt.Println("============================")
+	// Analyze and visualize
+	analyzeWeatherData(weatherData)
+	generateVisualization(weatherData)
 }
