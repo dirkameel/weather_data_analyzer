@@ -5,40 +5,50 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
+	"time"
 )
 
 const (
-	apiKey      = "your_api_key_here" // Replace with your WeatherAPI.com key
-	baseURL     = "http://api.weatherapi.com/v1"
-	forecastDays = 3
+	apiKey      = "your_api_key_here" // Replace with your OpenWeatherMap API key
+	baseURL     = "https://api.openweathermap.org/data/2.5/weather"
+	tempUnit    = "metric" // Use "imperial" for Fahrenheit
 )
 
-func fetchWeatherData(location string) (*WeatherData, error) {
-	// Encode the location for URL
-	encodedLocation := url.QueryEscape(location)
+func fetchCurrentWeather(city string) (WeatherData, error) {
+	url := fmt.Sprintf("%s?q=%s&appid=%s&units=%s", baseURL, city, apiKey, tempUnit)
 	
-	// Build the API URL
-	apiURL := fmt.Sprintf("%s/forecast.json?key=%s&q=%s&days=%d&aqi=no&alerts=no",
-		baseURL, apiKey, encodedLocation, forecastDays)
-
-	// Make HTTP request
-	resp, err := http.Get(apiURL)
+	resp, err := http.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make API request: %v", err)
+		return WeatherData{}, fmt.Errorf("HTTP request failed: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return WeatherData{}, fmt.Errorf("API error: %s - %s", resp.Status, string(body))
 	}
 
-	// Parse JSON response
-	var weatherData WeatherData
-	if err := json.NewDecoder(resp.Body).Decode(&weatherData); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON response: %v", err)
+	var weatherResp WeatherResponse
+	if err := json.NewDecoder(resp.Body).Decode(&weatherResp); err != nil {
+		return WeatherData{}, fmt.Errorf("JSON decode failed: %v", err)
 	}
 
-	return &weatherData, nil
+	return WeatherData{
+		City:      weatherResp.Name,
+		Temp:      weatherResp.Main.Temp,
+		Humidity:  weatherResp.Main.Humidity,
+		Timestamp: time.Now(),
+	}, nil
+}
+
+func saveWeatherData(data []WeatherData) error {
+	file, err := os.Create("weather_data.json")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(data)
 }
