@@ -2,103 +2,104 @@ package main
 
 import (
 	"fmt"
-	"math"
-	"time"
+	"sort"
 )
 
-func NewWeatherAnalyzer(data *WeatherData, location string) *WeatherAnalyzer {
-	return &WeatherAnalyzer{
-		data:     data,
-		location: location,
-	}
+type AnalysisResult struct {
+	City        string
+	AvgTemp     float64
+	MaxTemp     float64
+	MinTemp     float64
+	Humidity    int
+	Temperature string
 }
 
-func (wa *WeatherAnalyzer) DisplayCurrentWeather() {
-	fmt.Printf("\n📍 Current Weather in %s, %s\n", wa.data.Location.Name, wa.data.Location.Country)
-	fmt.Printf("🌡️  Temperature: %.1f°C (%.1f°F)\n", wa.data.Current.TempC, wa.data.Current.TempF)
-	fmt.Println("=" * 50)
-}
-
-func (wa *WeatherAnalyzer) AnalyzeTrends() {
-	fmt.Printf("\n📊 Temperature Trends Analysis\n")
-	fmt.Println("=" * 50)
-
-	// Analyze daily trends
-	for i, day := range wa.data.Forecast.Forecastday {
-		dayName := "Today"
-		if i == 1 {
-			dayName = "Tomorrow"
-		} else if i > 1 {
-			dayName = fmt.Sprintf("Day %d", i+1)
-		}
-
-		fmt.Printf("\n%s (%s):\n", dayName, day.Date)
-		fmt.Printf("  📈 High: %.1f°C\n", day.Day.MaxTempC)
-		fmt.Printf("  📉 Low: %.1f°C\n", day.Day.MinTempC)
-		fmt.Printf("  📊 Average: %.1f°C\n", day.Day.AvgTempC)
-		fmt.Printf("  📏 Range: %.1f°C\n", day.Day.MaxTempC-day.Day.MinTempC)
+func analyzeWeatherData(data []WeatherData) {
+	fmt.Println("\n=== WEATHER ANALYSIS ===")
+	
+	if len(data) == 0 {
+		fmt.Println("No data to analyze")
+		return
 	}
 
-	// Analyze hourly trends for today
-	todayHours := wa.data.Forecast.Forecastday[0].Hour
-	wa.analyzeHourlyTrends(todayHours)
-}
+	var results []AnalysisResult
+	var allTemps []float64
 
-func (wa *WeatherAnalyzer) analyzeHourlyTrends(hours []HourData) {
-	fmt.Printf("\n⏰ Today's Hourly Analysis:\n")
-	
-	var minTemp, maxTemp float64 = math.MaxFloat64, -math.MaxFloat64
-	var warmestHour, coldestHour string
-	var totalTemp float64
-
-	for _, hour := range hours {
-		if hour.TempC < minTemp {
-			minTemp = hour.TempC
-			coldestHour = formatHour(hour.TimeEpoch)
-		}
-		if hour.TempC > maxTemp {
-			maxTemp = hour.TempC
-			warmestHour = formatHour(hour.TimeEpoch)
-		}
-		totalTemp += hour.TempC
-	}
-
-	fmt.Printf("  🔥 Warmest time: %s (%.1f°C)\n", warmestHour, maxTemp)
-	fmt.Printf("  ❄️  Coldest time: %s (%.1f°C)\n", coldestHour, minTemp)
-	fmt.Printf("  📊 Daily average: %.1f°C\n", totalTemp/float64(len(hours)))
-}
-
-func (wa *WeatherAnalyzer) GenerateVisualization() {
-	fmt.Printf("\n📈 Temperature Visualization\n")
-	fmt.Println("=" * 50)
-	
-	// Simple ASCII visualization for today's hourly temperatures
-	todayHours := wa.data.Forecast.Forecastday[0].Hour
-	
-	fmt.Printf("\nToday's Temperature Chart:\n")
-	fmt.Println("Time  | Temp°C | Chart")
-	fmt.Println("------|--------|-------------------")
-	
-	for i := 0; i < len(todayHours); i += 3 { // Show every 3 hours for brevity
-		hour := todayHours[i]
-		temp := hour.TempC
-		timeStr := formatHour(hour.TimeEpoch)
+	for _, wd := range data {
+		allTemps = append(allTemps, wd.Temp)
 		
-		// Create a simple bar chart
-		bars := int((temp + 10) / 2) // Scale for visualization
-		if bars < 0 {
-			bars = 0
+		tempDesc := getTemperatureDescription(wd.Temp)
+		result := AnalysisResult{
+			City:        wd.City,
+			AvgTemp:     wd.Temp,
+			MaxTemp:     wd.Temp,
+			MinTemp:     wd.Temp,
+			Humidity:    wd.Humidity,
+			Temperature: tempDesc,
 		}
-		if bars > 20 {
-			bars = 20
-		}
-		
-		chart := strings.Repeat("█", bars)
-		fmt.Printf("%s | %6.1f | %s\n", timeStr, temp, chart)
+		results = append(results, result)
+	}
+
+	// Sort by temperature
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].AvgTemp > results[j].AvgTemp
+	})
+
+	// Display results
+	fmt.Printf("\nTemperature Ranking (Hottest to Coldest):\n")
+	fmt.Println("----------------------------------------")
+	for i, result := range results {
+		fmt.Printf("%d. %s: %.1f°C (%s) - Humidity: %d%%\n", 
+			i+1, result.City, result.AvgTemp, result.Temperature, result.Humidity)
+	}
+
+	// Overall statistics
+	if len(allTemps) > 0 {
+		avg := calculateAverage(allTemps)
+		min, max := findMinMax(allTemps)
+		fmt.Printf("\nOverall Statistics:\n")
+		fmt.Printf("Average Temperature: %.1f°C\n", avg)
+		fmt.Printf("Temperature Range: %.1f°C to %.1f°C\n", min, max)
 	}
 }
 
-func formatHour(epoch int64) string {
-	t := time.Unix(epoch, 0)
-	return t.Format("15:04")
+func getTemperatureDescription(temp float64) string {
+	switch {
+	case temp < 0:
+		return "Freezing"
+	case temp < 10:
+		return "Cold"
+	case temp < 20:
+		return "Cool"
+	case temp < 25:
+		return "Mild"
+	case temp < 30:
+		return "Warm"
+	default:
+		return "Hot"
+	}
+}
+
+func calculateAverage(temps []float64) float64 {
+	sum := 0.0
+	for _, temp := range temps {
+		sum += temp
+	}
+	return sum / float64(len(temps))
+}
+
+func findMinMax(temps []float64) (min, max float64) {
+	if len(temps) == 0 {
+		return 0, 0
+	}
+	min, max = temps[0], temps[0]
+	for _, temp := range temps {
+		if temp < min {
+			min = temp
+		}
+		if temp > max {
+			max = temp
+		}
+	}
+	return min, max
 }
