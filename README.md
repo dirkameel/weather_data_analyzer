@@ -1,71 +1,113 @@
-# Weather Data Analyzer
+## Weather Data Analyzer
 
-A simple Go application that fetches, analyzes, and visualizes weather data from OpenWeatherMap API.
+A simple Go application that fetches weather data from WeatherAPI and provides temperature trend analysis with ASCII visualization.
 
-## Setup Instructions
+### Features
 
-1. **Get an API Key:**
-   - Sign up at [OpenWeatherMap](https://openweathermap.org/api)
+- 🌤️ Fetches current weather and 7-day forecast
+- 📊 Analyzes temperature trends
+- 📈 Generates ASCII temperature charts
+- 📱 Simple command-line interface
+- 🐳 Docker support
+
+### Prerequisites
+
+1. Go 1.21 or later
+2. WeatherAPI account (free tier available)
+
+### Setup
+
+1. **Get API Key:**
+   - Sign up at [WeatherAPI.com](https://www.weatherapi.com/)
    - Get your free API key
-   - Replace `your_api_key_here` in `api_client.go` with your actual API key
 
-2. **Install Go:**
-   - Make sure you have Go 1.21 or later installed
-   - Verify with: `go version`
+2. **Configure API Key (choose one method):**
 
-3. **Run the Application:**
+   **Option A: Environment Variable**
    ```bash
-   # Build and run directly
-   go run main.go London Tokyo NewYork Paris Berlin
-   
-   # Or build an executable
-   go build -o weather-analyzer
-   ./weather-analyzer London Tokyo NewYork
+   export WEATHER_API_KEY="your_api_key_here"
    ```
 
-## Usage Examples
+   **Option B: Config File**
+   ```bash
+   cp config.example.json config.json
+   # Edit config.json with your API key
+   ```
 
+### Installation & Usage
+
+**Method 1: Using Go Run**
 ```bash
-# Compare multiple cities
-go run main.go London Tokyo NewYork Sydney Mumbai
-
-# Single city analysis
-go run main.go Paris
-
-# Regional comparison
-go run main.go Seattle SanFrancisco LosAngeles Miami
+go run main.go
+# Or specify a city:
+go run main.go "New York"
 ```
 
-## Features
+**Method 2: Build and Run**
+```bash
+make build
+./weather-analyzer "London"
+```
 
-- **Real-time Data**: Fetches current weather from OpenWeatherMap API
-- **Temperature Analysis**: Ranks cities by temperature with descriptions
-- **Visual Charts**: ASCII bar charts for easy temperature comparison
-- **Data Persistence**: Saves weather data to `weather_data.json`
-- **Humidity Tracking**: Includes humidity levels in analysis
+**Method 3: Docker**
+```bash
+# Build image
+make docker-build
 
-## Output Includes
+# Run with environment variable
+docker run -e WEATHER_API_KEY=your_key_here weather-analyzer "Paris"
+```
 
-- Temperature rankings (hottest to coldest)
-- Temperature descriptions (Freezing, Cold, Cool, Mild, Warm, Hot)
-- ASCII bar chart visualization
-- Temperature differences between cities
-- Humidity percentages
-- Overall statistics
+### Example Output
 
-## Requirements
+```
+🌤️  Weather Data Analyzer
+=========================
+Enter city name (or press Enter for London): 
 
-- Go 1.21+
-- Internet connection
-- Valid OpenWeatherMap API key
-- Cities must be spelled correctly as recognized by the API
+📍 Location: London, United Kingdom
+🌡️  Current Temperature: 12.5°C
 
-## File Structure
+📊 7-Day Temperature Forecast:
+Date     | Max Temp | Min Temp | Avg Temp | Trend
+---------|----------|----------|----------|-------
+Dec 15   |   14.2°C |    8.1°C |   11.2°C | ➡️
+Dec 16   |   13.8°C |    7.9°C |   10.9°C | 📉
+...
 
-- `main.go` - Application entry point and orchestration
-- `api_client.go` - HTTP client for weather API
-- `analyzer.go` - Data analysis and statistics
-- `visualizer.go` - ASCII chart generation
-- `go.mod` - Go module definition
+📊 Temperature Chart:
+====================
+ 16.0°C |           
+ 15.0°C |           
+ 14.0°C |   █       
+    ... |   █ ▄ █   
+  8.0°C | █ █ █ █ █
+```
 
-The application will create a `weather_data.json` file containing the fetched weather data for future reference.
+### API Rate Limits
+
+- Free tier: 1,000,000 calls per month
+- No credit card required for free tier
+
+### Project Structure
+
+- `main.go` - Main application logic
+- `config.example.json` - Example configuration file
+- `go.mod` - Go module file
+- `Dockerfile` - Container configuration
+- `Makefile` - Build automation
+
+### Customization
+
+You can modify the chart appearance by adjusting the `chartHeight` variable in the `generateTemperatureChart` function.
+
+### Error Handling
+
+- Invalid API keys
+- Network connectivity issues
+- Invalid city names
+- API rate limits
+
+### License
+
+MIT License - Feel free to modify and distribute.
