@@ -8,323 +8,254 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
-// WeatherData represents the structure for weather API response
-type WeatherData struct {
-	Location struct {
-		Name    string `json:"name"`
-		Country string `json:"country"`
-	} `json:"location"`
-	Current struct {
-		TempC     float64 `json:"temp_c"`
-		TempF     float64 `json:"temp_f"`
-		Condition struct {
-			Text string `json:"text"`
-		} `json:"condition"`
-		Humidity   int     `json:"humidity"`
-		WindKph    float64 `json:"wind_kph"`
-		FeelsLikeC float64 `json:"feelslike_c"`
-	} `json:"current"`
-	Forecast struct {
-		Forecastday []struct {
-			Date string `json:"date"`
-			Day  struct {
-				MaxTempC float64 `json:"maxtemp_c"`
-				MinTempC float64 `json:"mintemp_c"`
-				AvgTempC float64 `json:"avgtemp_c"`
-			} `json:"day"`
-		} `json:"forecastday"`
-	} `json:"forecast"`
-}
-
-// WeatherTrend represents temperature trends over time
-type WeatherTrend struct {
-	Location    string
-	Dates       []string
-	MaxTemps    []float64
-	MinTemps    []float64
-	AvgTemps    []float64
-	CurrentTemp float64
-}
-
-// Config holds API configuration
-type Config struct {
+type WeatherConfig struct {
 	APIKey string `json:"api_key"`
+	City   string `json:"city"`
+	Units  string `json:"units"`
+}
+
+type WeatherData struct {
+	Main struct {
+		Temp     float64 `json:"temp"`
+		Humidity int     `json:"humidity"`
+		Pressure int     `json:"pressure"`
+	} `json:"main"`
+	Weather []struct {
+		Description string `json:"description"`
+		Main        string `json:"main"`
+	} `json:"weather"`
+	Wind struct {
+		Speed float64 `json:"speed"`
+	} `json:"wind"`
+	Name string `json:"name"`
+	DT   int64  `json:"dt"`
+}
+
+type ForecastData struct {
+	List []struct {
+		DT   int64 `json:"dt"`
+		Main struct {
+			Temp float64 `json:"temp"`
+		} `json:"main"`
+		Weather []struct {
+			Description string `json:"description"`
+		} `json:"weather"`
+	} `json:"list"`
+	City struct {
+		Name string `json:"name"`
+	} `json:"city"`
 }
 
 func main() {
-	fmt.Println("🌤️  Weather Data Analyzer")
-	fmt.Println("=========================")
-
 	// Load configuration
-	config, err := loadConfig()
+	config, err := loadConfig("config.json")
 	if err != nil {
 		log.Fatal("Error loading config:", err)
 	}
 
-	// Get city from user input or use default
-	city := getUserInput()
-	
-	// Fetch weather data
-	weatherData, err := fetchWeatherData(city, config.APIKey)
+	fmt.Println("🌤️  Weather Data Analyzer")
+	fmt.Println("==========================")
+
+	// Fetch current weather
+	currentWeather, err := fetchCurrentWeather(config)
 	if err != nil {
-		log.Fatal("Error fetching weather data:", err)
+		log.Fatal("Error fetching current weather:", err)
 	}
 
-	// Analyze and display trends
-	trends := analyzeWeatherTrends(weatherData)
-	displayWeatherAnalysis(trends)
-	
+	// Fetch forecast
+	forecast, err := fetchForecast(config)
+	if err != nil {
+		log.Fatal("Error fetching forecast:", err)
+	}
+
+	// Display current weather
+	displayCurrentWeather(currentWeather)
+
+	// Analyze and visualize trends
+	analyzeTrends(forecast)
+
 	// Generate visualization
-	generateTemperatureChart(trends)
-	
-	fmt.Println("\n✅ Analysis complete! Check the generated chart above.")
+	generateVisualization(forecast)
 }
 
-func loadConfig() (*Config, error) {
-	// Try to load from config file first
-	if _, err := os.Stat("config.json"); err == nil {
-		file, err := os.ReadFile("config.json")
-		if err != nil {
-			return nil, err
-		}
-		
-		var config Config
-		err = json.Unmarshal(file, &config)
-		if err != nil {
-			return nil, err
-		}
-		
-		if config.APIKey != "" {
-			return &config, nil
-		}
+func loadConfig(filename string) (*WeatherConfig, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
 	}
-	
-	// Fallback to environment variable
-	apiKey := os.Getenv("WEATHER_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("no API key found. Please set WEATHER_API_KEY environment variable or create config.json")
+	defer file.Close()
+
+	var config WeatherConfig
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		return nil, err
 	}
-	
-	return &Config{APIKey: apiKey}, nil
+
+	return &config, nil
 }
 
-func getUserInput() string {
-	if len(os.Args) > 1 {
-		return os.Args[1]
-	}
-	
-	fmt.Print("Enter city name (or press Enter for London): ")
-	var input string
-	fmt.Scanln(&input)
-	
-	if input == "" {
-		return "London"
-	}
-	return input
-}
+func fetchCurrentWeather(config *WeatherConfig) (*WeatherData, error) {
+	url := fmt.Sprintf(
+		"https://api.openweathermap.org/data/2.5/weather?q=%s&units=%s&appid=%s",
+		config.City, config.Units, config.APIKey,
+	)
 
-func fetchWeatherData(city, apiKey string) (*WeatherData, error) {
-	url := fmt.Sprintf("http://api.weatherapi.com/v1/forecast.json?key=%s&q=%s&days=7&aqi=no&alerts=no", apiKey, city)
-	
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed with status: %s", resp.Status)
-	}
-	
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-	
-	var weatherData WeatherData
-	err = json.Unmarshal(body, &weatherData)
+
+	var weather WeatherData
+	err = json.Unmarshal(body, &weather)
 	if err != nil {
 		return nil, err
 	}
-	
-	return &weatherData, nil
+
+	return &weather, nil
 }
 
-func analyzeWeatherTrends(data *WeatherData) *WeatherTrend {
-	trend := &WeatherTrend{
-		Location:    fmt.Sprintf("%s, %s", data.Location.Name, data.Location.Country),
-		CurrentTemp: data.Current.TempC,
-	}
-	
-	for _, day := range data.Forecast.Forecastday {
-		trend.Dates = append(trend.Dates, formatDate(day.Date))
-		trend.MaxTemps = append(trend.MaxTemps, day.Day.MaxTempC)
-		trend.MinTemps = append(trend.MinTemps, day.Day.MinTempC)
-		trend.AvgTemps = append(trend.AvgTemps, day.Day.AvgTempC)
-	}
-	
-	return trend
-}
+func fetchForecast(config *WeatherConfig) (*ForecastData, error) {
+	url := fmt.Sprintf(
+		"https://api.openweathermap.org/data/2.5/forecast?q=%s&units=%s&appid=%s",
+		config.City, config.Units, config.APIKey,
+	)
 
-func formatDate(dateStr string) string {
-	t, err := time.Parse("2006-01-02", dateStr)
+	resp, err := http.Get(url)
 	if err != nil {
-		return dateStr
+		return nil, err
 	}
-	return t.Format("Jan 02")
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var forecast ForecastData
+	err = json.Unmarshal(body, &forecast)
+	if err != nil {
+		return nil, err
+	}
+
+	return &forecast, nil
 }
 
-func displayWeatherAnalysis(trends *WeatherTrend) {
-	fmt.Printf("\n📍 Location: %s\n", trends.Location)
-	fmt.Printf("🌡️  Current Temperature: %.1f°C\n", trends.CurrentTemp)
+func displayCurrentWeather(weather *WeatherData) {
+	fmt.Printf("\n📍 Current Weather in %s\n", weather.Name)
+	fmt.Printf("🌡️  Temperature: %.1f°C\n", weather.Main.Temp)
+	fmt.Printf("💧 Humidity: %d%%\n", weather.Main.Humidity)
+	fmt.Printf("🌬️  Wind Speed: %.1f m/s\n", weather.Wind.Speed)
+	fmt.Printf("📊 Pressure: %d hPa\n", weather.Main.Pressure)
 	
-	fmt.Println("\n📊 7-Day Temperature Forecast:")
-	fmt.Println("Date     | Max Temp | Min Temp | Avg Temp | Trend")
-	fmt.Println("---------|----------|----------|----------|-------")
-	
-	for i := 0; i < len(trends.Dates); i++ {
-		trendSymbol := getTrendSymbol(trends.AvgTemps, i)
-		fmt.Printf("%-8s | %7.1f°C | %7.1f°C | %7.1f°C | %s\n", 
-			trends.Dates[i], trends.MaxTemps[i], trends.MinTemps[i], trends.AvgTemps[i], trendSymbol)
+	if len(weather.Weather) > 0 {
+		fmt.Printf("☁️  Conditions: %s (%s)\n", 
+			weather.Weather[0].Description, weather.Weather[0].Main)
 	}
 	
+	timestamp := time.Unix(weather.DT, 0)
+	fmt.Printf("🕒 Last Updated: %s\n", timestamp.Format("2006-01-02 15:04:05"))
+}
+
+func analyzeTrends(forecast *ForecastData) {
+	fmt.Printf("\n📈 Temperature Trend Analysis for %s\n", forecast.City.Name)
+	fmt.Println("=====================================")
+
+	if len(forecast.List) == 0 {
+		fmt.Println("No forecast data available")
+		return
+	}
+
 	// Calculate statistics
-	avgMax := calculateAverage(trends.MaxTemps)
-	avgMin := calculateAverage(trends.MinTemps)
-	tempRange := trends.MaxTemps[0] - trends.MinTemps[0]
-	
-	fmt.Printf("\n📈 Statistics:")
-	fmt.Printf("\n• Average High: %.1f°C", avgMax)
-	fmt.Printf("\n• Average Low: %.1f°C", avgMin)
-	fmt.Printf("\n• Temperature Range: %.1f°C", tempRange)
-	
-	overallTrend := getOverallTrend(trends.AvgTemps)
-	fmt.Printf("\n• Overall Trend: %s\n", overallTrend)
+	minTemp := forecast.List[0].Main.Temp
+	maxTemp := forecast.List[0].Main.Temp
+	sumTemp := 0.0
+
+	for i, item := range forecast.List {
+		if item.Main.Temp < minTemp {
+			minTemp = item.Main.Temp
+		}
+		if item.Main.Temp > maxTemp {
+			maxTemp = item.Main.Temp
+		}
+		sumTemp += item.Main.Temp
+
+		// Display next 5 data points
+		if i < 5 {
+			timestamp := time.Unix(item.DT, 0)
+			fmt.Printf("📅 %s: %.1f°C - %s\n", 
+				timestamp.Format("01/02 15:04"), 
+				item.Main.Temp, 
+				item.Weather[0].Description)
+		}
+	}
+
+	avgTemp := sumTemp / float64(len(forecast.List))
+	fmt.Printf("\n📊 Statistics:\n")
+	fmt.Printf("   Minimum Temperature: %.1f°C\n", minTemp)
+	fmt.Printf("   Maximum Temperature: %.1f°C\n", maxTemp)
+	fmt.Printf("   Average Temperature: %.1f°C\n", avgTemp)
+	fmt.Printf("   Temperature Range: %.1f°C\n", maxTemp-minTemp)
 }
 
-func getTrendSymbol(temps []float64, index int) string {
-	if index == 0 || index >= len(temps)-1 {
-		return "➡️" // stable
-	}
-	
-	if temps[index] > temps[index-1] {
-		return "📈" // rising
-	} else if temps[index] < temps[index-1] {
-		return "📉" // falling
-	}
-	return "➡️" // stable
-}
+func generateVisualization(forecast *ForecastData) {
+	fmt.Printf("\n📊 Temperature Visualization\n")
+	fmt.Println("============================")
 
-func getOverallTrend(temps []float64) string {
-	if len(temps) < 2 {
-		return "Insufficient data"
+	if len(forecast.List) == 0 {
+		return
 	}
-	
-	firstAvg := calculateAverage(temps[:len(temps)/2])
-	secondAvg := calculateAverage(temps[len(temps)/2:])
-	
-	if secondAvg > firstAvg + 1.0 {
-		return "Warming trend 🔥"
-	} else if secondAvg < firstAvg - 1.0 {
-		return "Cooling trend ❄️"
-	}
-	return "Stable conditions ⚖️"
-}
 
-func calculateAverage(temps []float64) float64 {
-	if len(temps) == 0 {
-		return 0
-	}
-	
-	sum := 0.0
-	for _, temp := range temps {
-		sum += temp
-	}
-	return sum / float64(len(temps))
-}
-
-func generateTemperatureChart(trends *WeatherTrend) {
-	fmt.Println("\n📊 Temperature Chart:")
-	fmt.Println("====================")
-	
 	// Find min and max for scaling
-	minTemp, maxTemp := findMinMax(trends.MinTemps, trends.MaxTemps)
-	chartHeight := 10
-	
-	for row := chartHeight; row >= 0; row-- {
-		temp := minTemp + (float64(row) / float64(chartHeight)) * (maxTemp - minTemp)
-		
-		fmt.Printf("%5.1f°C | ", temp)
-		
-		for i := 0; i < len(trends.Dates); i++ {
-			if trends.MaxTemps[i] >= temp && trends.MinTemps[i] <= temp {
-				// Temperature falls within this day's range
-				if trends.AvgTemps[i] >= temp {
-					fmt.Print("█") // Above average
-				} else {
-					fmt.Print("▄") // Below average but in range
-				}
-			} else if trends.MaxTemps[i] >= temp {
-				fmt.Print(" ") // Above max temp
-			} else {
-				fmt.Print(" ") // Below min temp
-			}
-			fmt.Print(" ")
+	minTemp := forecast.List[0].Main.Temp
+	maxTemp := forecast.List[0].Main.Temp
+	for _, item := range forecast.List {
+		if item.Main.Temp < minTemp {
+			minTemp = item.Main.Temp
 		}
-		fmt.Println()
-	}
-	
-	// Print X-axis labels
-	fmt.Print("       | ")
-	for i, date := range trends.Dates {
-		if i == 0 {
-			fmt.Print("T")
-		} else {
-			fmt.Print(" ")
-		}
-		fmt.Print(" ")
-	}
-	fmt.Println()
-	
-	fmt.Print("       | ")
-	for _, date := range trends.Dates {
-		fmt.Printf("%-2s", string(date[0]))
-	}
-	fmt.Println()
-	
-	fmt.Print("       | ")
-	for i := range trends.Dates {
-		if i == len(trends.Dates)-1 {
-			fmt.Print("→")
-		} else {
-			fmt.Print("  ")
+		if item.Main.Temp > maxTemp {
+			maxTemp = item.Main.Temp
 		}
 	}
-	fmt.Println(" Time")
-	
-	fmt.Println("\nLegend: █ = Average/Hot, ▄ = Cool, empty = Outside range")
-}
 
-func findMinMax(minTemps, maxTemps []float64) (float64, float64) {
-	min := minTemps[0]
-	max := maxTemps[0]
-	
-	for i := 1; i < len(minTemps); i++ {
-		if minTemps[i] < min {
-			min = minTemps[i]
-		}
-		if maxTemps[i] > max {
-			max = maxTemps[i]
-		}
+	// Simple ASCII visualization
+	tempRange := maxTemp - minTemp
+	if tempRange == 0 {
+		tempRange = 1 // Avoid division by zero
 	}
-	
-	// Add some padding
-	min = min - 2
-	max = max + 2
-	
-	return min, max
+
+	fmt.Println("Legend: █ = 2°C increment")
+	fmt.Println("Temperature Scale:")
+
+	for i, item := range forecast.List {
+		if i >= 8 { // Limit to first 8 data points for readability
+			break
+		}
+		
+		timestamp := time.Unix(item.DT, 0)
+		normalizedTemp := (item.Main.Temp - minTemp) / tempRange
+		bars := int(normalizedTemp * 20) // Scale to 20 characters max
+		
+		visualization := ""
+		for j := 0; j < bars; j++ {
+			visualization += "█"
+		}
+		
+		fmt.Printf("%s: %6.1f°C %s\n", 
+			timestamp.Format("01/02 15:04"), 
+			item.Main.Temp, 
+			visualization)
+	}
+
+	// Print scale reference
+	fmt.Printf("\nScale Reference: %.1f°C to %.1f°C\n", minTemp, maxTemp)
 }
