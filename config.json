@@ -1,4 +1,5 @@
 {
   "api_key": "YOUR_API_KEY_HERE",
-  "city": "London"
+  "city": "London",
+  "units": "metric"
 }
