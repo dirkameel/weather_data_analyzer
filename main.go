@@ -3,106 +3,70 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
-type WeatherConfig struct {
-	APIKey string `json:"api_key"`
-	City   string `json:"city"`
-	Units  string `json:"units"`
-}
-
 type WeatherData struct {
-	Main struct {
-		Temp     float64 `json:"temp"`
-		Humidity int     `json:"humidity"`
-		Pressure int     `json:"pressure"`
-	} `json:"main"`
-	Weather []struct {
-		Description string `json:"description"`
-		Main        string `json:"main"`
-	} `json:"weather"`
-	Wind struct {
-		Speed float64 `json:"speed"`
-	} `json:"wind"`
-	Name string `json:"name"`
-	DT   int64  `json:"dt"`
+	Location struct {
+		Name    string `json:"name"`
+		Country string `json:"country"`
+	} `json:"location"`
+	Current struct {
+		TempC     float64 `json:"temp_c"`
+		Condition struct {
+			Text string `json:"text"`
+		} `json:"condition"`
+		Humidity   float64 `json:"humidity"`
+		WindKph    float64 `json:"wind_kph"`
+		FeelsLikeC float64 `json:"feelslike_c"`
+	} `json:"current"`
+	Forecast struct {
+		Forecastday []struct {
+			Date string `json:"date"`
+			Day  struct {
+				MaxtempC float64 `json:"maxtemp_c"`
+				MintempC float64 `json:"mintemp_c"`
+				AvgtempC float64 `json:"avgtemp_c"`
+			} `json:"day"`
+		} `json:"forecastday"`
+	} `json:"forecast"`
 }
 
-type ForecastData struct {
-	List []struct {
-		DT   int64 `json:"dt"`
-		Main struct {
-			Temp float64 `json:"temp"`
-		} `json:"main"`
-		Weather []struct {
-			Description string `json:"description"`
-		} `json:"weather"`
-	} `json:"list"`
-	City struct {
-		Name string `json:"name"`
-	} `json:"city"`
+type WeatherAnalyzer struct {
+	Data []WeatherData
 }
 
 func main() {
-	// Load configuration
-	config, err := loadConfig("config.json")
-	if err != nil {
-		log.Fatal("Error loading config:", err)
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: go run main.go <city>")
+		fmt.Println("Example: go run main.go London")
+		return
 	}
 
-	fmt.Println("🌤️  Weather Data Analyzer")
-	fmt.Println("==========================")
-
-	// Fetch current weather
-	currentWeather, err := fetchCurrentWeather(config)
+	city := os.Args[1]
+	
+	// Fetch weather data
+	weatherData, err := fetchWeatherData(city)
 	if err != nil {
-		log.Fatal("Error fetching current weather:", err)
+		log.Fatal("Error fetching weather data:", err)
 	}
 
-	// Fetch forecast
-	forecast, err := fetchForecast(config)
-	if err != nil {
-		log.Fatal("Error fetching forecast:", err)
-	}
-
-	// Display current weather
-	displayCurrentWeather(currentWeather)
-
-	// Analyze and visualize trends
-	analyzeTrends(forecast)
-
-	// Generate visualization
-	generateVisualization(forecast)
+	// Analyze and display results
+	analyzer := &WeatherAnalyzer{Data: []WeatherData{*weatherData}}
+	analyzer.DisplayCurrentWeather()
+	analyzer.DisplayTemperatureTrends()
+	analyzer.GenerateVisualization()
 }
 
-func loadConfig(filename string) (*WeatherConfig, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var config WeatherConfig
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&config)
-	if err != nil {
-		return nil, err
-	}
-
-	return &config, nil
-}
-
-func fetchCurrentWeather(config *WeatherConfig) (*WeatherData, error) {
-	url := fmt.Sprintf(
-		"https://api.openweathermap.org/data/2.5/weather?q=%s&units=%s&appid=%s",
-		config.City, config.Units, config.APIKey,
-	)
+func fetchWeatherData(city string) (*WeatherData, error) {
+	apiKey := "your_api_key_here" // Replace with actual API key
+	url := fmt.Sprintf("http://api.weatherapi.com/v1/forecast.json?key=%s&q=%s&days=3&aqi=no&alerts=no", apiKey, city)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -110,152 +74,113 @@ func fetchCurrentWeather(config *WeatherConfig) (*WeatherData, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	var weather WeatherData
-	err = json.Unmarshal(body, &weather)
+	var weatherData WeatherData
+	err = json.Unmarshal(body, &weatherData)
 	if err != nil {
 		return nil, err
 	}
 
-	return &weather, nil
+	return &weatherData, nil
 }
 
-func fetchForecast(config *WeatherConfig) (*ForecastData, error) {
-	url := fmt.Sprintf(
-		"https://api.openweathermap.org/data/2.5/forecast?q=%s&units=%s&appid=%s",
-		config.City, config.Units, config.APIKey,
-	)
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var forecast ForecastData
-	err = json.Unmarshal(body, &forecast)
-	if err != nil {
-		return nil, err
-	}
-
-	return &forecast, nil
-}
-
-func displayCurrentWeather(weather *WeatherData) {
-	fmt.Printf("\n📍 Current Weather in %s\n", weather.Name)
-	fmt.Printf("🌡️  Temperature: %.1f°C\n", weather.Main.Temp)
-	fmt.Printf("💧 Humidity: %d%%\n", weather.Main.Humidity)
-	fmt.Printf("🌬️  Wind Speed: %.1f m/s\n", weather.Wind.Speed)
-	fmt.Printf("📊 Pressure: %d hPa\n", weather.Main.Pressure)
-	
-	if len(weather.Weather) > 0 {
-		fmt.Printf("☁️  Conditions: %s (%s)\n", 
-			weather.Weather[0].Description, weather.Weather[0].Main)
-	}
-	
-	timestamp := time.Unix(weather.DT, 0)
-	fmt.Printf("🕒 Last Updated: %s\n", timestamp.Format("2006-01-02 15:04:05"))
-}
-
-func analyzeTrends(forecast *ForecastData) {
-	fmt.Printf("\n📈 Temperature Trend Analysis for %s\n", forecast.City.Name)
-	fmt.Println("=====================================")
-
-	if len(forecast.List) == 0 {
-		fmt.Println("No forecast data available")
+func (wa *WeatherAnalyzer) DisplayCurrentWeather() {
+	if len(wa.Data) == 0 {
+		fmt.Println("No weather data available")
 		return
 	}
 
-	// Calculate statistics
-	minTemp := forecast.List[0].Main.Temp
-	maxTemp := forecast.List[0].Main.Temp
-	sumTemp := 0.0
-
-	for i, item := range forecast.List {
-		if item.Main.Temp < minTemp {
-			minTemp = item.Main.Temp
-		}
-		if item.Main.Temp > maxTemp {
-			maxTemp = item.Main.Temp
-		}
-		sumTemp += item.Main.Temp
-
-		// Display next 5 data points
-		if i < 5 {
-			timestamp := time.Unix(item.DT, 0)
-			fmt.Printf("📅 %s: %.1f°C - %s\n", 
-				timestamp.Format("01/02 15:04"), 
-				item.Main.Temp, 
-				item.Weather[0].Description)
-		}
-	}
-
-	avgTemp := sumTemp / float64(len(forecast.List))
-	fmt.Printf("\n📊 Statistics:\n")
-	fmt.Printf("   Minimum Temperature: %.1f°C\n", minTemp)
-	fmt.Printf("   Maximum Temperature: %.1f°C\n", maxTemp)
-	fmt.Printf("   Average Temperature: %.1f°C\n", avgTemp)
-	fmt.Printf("   Temperature Range: %.1f°C\n", maxTemp-minTemp)
+	data := wa.Data[0]
+	fmt.Println("\n=== CURRENT WEATHER ===")
+	fmt.Printf("Location: %s, %s\n", data.Location.Name, data.Location.Country)
+	fmt.Printf("Temperature: %.1f°C (Feels like: %.1f°C)\n", data.Current.TempC, data.Current.FeelsLikeC)
+	fmt.Printf("Condition: %s\n", data.Current.Condition.Text)
+	fmt.Printf("Humidity: %.0f%%\n", data.Current.Humidity)
+	fmt.Printf("Wind: %.1f km/h\n", data.Current.WindKph)
 }
 
-func generateVisualization(forecast *ForecastData) {
-	fmt.Printf("\n📊 Temperature Visualization\n")
-	fmt.Println("============================")
-
-	if len(forecast.List) == 0 {
+func (wa *WeatherAnalyzer) DisplayTemperatureTrends() {
+	if len(wa.Data) == 0 {
 		return
 	}
 
-	// Find min and max for scaling
-	minTemp := forecast.List[0].Main.Temp
-	maxTemp := forecast.List[0].Main.Temp
-	for _, item := range forecast.List {
-		if item.Main.Temp < minTemp {
-			minTemp = item.Main.Temp
-		}
-		if item.Main.Temp > maxTemp {
-			maxTemp = item.Main.Temp
+	data := wa.Data[0]
+	fmt.Println("\n=== TEMPERATURE TRENDS (3-Day Forecast) ===")
+	
+	for i, day := range data.Forecast.Forecastday {
+		date, _ := time.Parse("2006-01-02", day.Date)
+		dayName := date.Format("Monday")
+		
+		fmt.Printf("%s (%s):\n", dayName, day.Date)
+		fmt.Printf("  Max: %.1f°C | Min: %.1f°C | Avg: %.1f°C\n", 
+			day.Day.MaxtempC, day.Day.MintempC, day.Day.AvgtempC)
+		
+		if i < len(data.Forecast.Forecastday)-1 {
+			nextDay := data.Forecast.Forecastday[i+1]
+			tempChange := nextDay.Day.AvgtempC - day.Day.AvgtempC
+			trend := "stable"
+			if tempChange > 1 {
+				trend = "warming"
+			} else if tempChange < -1 {
+				trend = "cooling"
+			}
+			fmt.Printf("  Trend: %s (Δ%.1f°C)\n", trend, tempChange)
 		}
 	}
+}
 
-	// Simple ASCII visualization
-	tempRange := maxTemp - minTemp
-	if tempRange == 0 {
-		tempRange = 1 // Avoid division by zero
+func (wa *WeatherAnalyzer) GenerateVisualization() {
+	if len(wa.Data) == 0 {
+		return
 	}
 
-	fmt.Println("Legend: █ = 2°C increment")
-	fmt.Println("Temperature Scale:")
-
-	for i, item := range forecast.List {
-		if i >= 8 { // Limit to first 8 data points for readability
-			break
-		}
+	data := wa.Data[0]
+	fmt.Println("\n=== TEMPERATURE VISUALIZATION ===")
+	
+	for _, day := range data.Forecast.Forecastday {
+		date, _ := time.Parse("2006-01-02", day.Date)
+		dayName := date.Format("Mon")
 		
-		timestamp := time.Unix(item.DT, 0)
-		normalizedTemp := (item.Main.Temp - minTemp) / tempRange
-		bars := int(normalizedTemp * 20) // Scale to 20 characters max
+		// Create a simple bar chart for temperature range
+		rangeWidth := int(day.Day.MaxtempC - day.Day.MintempC)
+		minBar := strings.Repeat(" ", int(day.Day.MintempC)+10) // Offset for negative temps
+		rangeBar := strings.Repeat "▀", rangeWidth)
 		
-		visualization := ""
-		for j := 0; j < bars; j++ {
-			visualization += "█"
-		}
-		
-		fmt.Printf("%s: %6.1f°C %s\n", 
-			timestamp.Format("01/02 15:04"), 
-			item.Main.Temp, 
-			visualization)
+		fmt.Printf("%s: %5.1f°C ", dayName, day.Day.AvgtempC)
+		fmt.Printf("[%s%s] (%.1f°C - %.1f°C)\n", minBar, rangeBar, day.Day.MintempC, day.Day.MaxtempC)
 	}
+	
+	// Additional analysis
+	fmt.Println("\n=== WEATHER ANALYSIS ===")
+	currentTemp := data.Current.TempC
+	avgTemp := calculateAverageTemp(data)
+	
+	fmt.Printf("Current vs Forecast Average: %.1f°C vs %.1f°C\n", currentTemp, avgTemp)
+	
+	if currentTemp > avgTemp + 2 {
+		fmt.Println("📈 Currently warmer than forecast average")
+	} else if currentTemp < avgTemp - 2 {
+		fmt.Println("📉 Currently cooler than forecast average")
+	} else {
+		fmt.Println("➡️  Temperature is close to forecast average")
+	}
+}
 
-	// Print scale reference
-	fmt.Printf("\nScale Reference: %.1f°C to %.1f°C\n", minTemp, maxTemp)
+func calculateAverageTemp(data WeatherData) float64 {
+	total := 0.0
+	count := 0
+	
+	for _, day := range data.Forecast.Forecastday {
+		total += day.Day.AvgtempC
+		count++
+	}
+	
+	if count > 0 {
+		return total / float64(count)
+	}
+	return 0
 }
