@@ -1,38 +1,37 @@
 package main
 
-import (
-	"fmt"
-	"os"
+const (
+	// WeatherAPI configuration
+	WeatherAPIBaseURL = "http://api.weatherapi.com/v1"
+	DefaultDays       = 3
+	
+	// Visualization settings
+	MaxChartWidth    = 50
+	TempScaleOffset  = 10 // For handling negative temperatures in visualization
 )
 
 type Config struct {
-	APIKey      string
-	APIEndpoint string
-	Units       string
+	APIKey     string
+	Days       int
+	Units      string // "metric" or "imperial"
+	EnableCache bool
 }
 
-func loadConfig() (*Config, error) {
-	apiKey := os.Getenv("WEATHER_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("WEATHER_API_KEY environment variable is required")
-	}
-
+func NewConfig() *Config {
 	return &Config{
-		APIKey:      apiKey,
-		APIEndpoint: "http://api.weatherapi.com/v1/current.json",
-		Units:       "metric",
-	}, nil
+		APIKey:     getAPIKey(),
+		Days:       DefaultDays,
+		Units:      "metric",
+		EnableCache: true,
+	}
 }
 
-func validateCity(city string) error {
-	if city == "" {
-		return fmt.Errorf("city name cannot be empty")
+func getAPIKey() string {
+	// First try environment variable
+	if apiKey := os.Getenv("WEATHER_API_KEY"); apiKey != "" {
+		return apiKey
 	}
 	
-	// Simple validation - you could add more complex validation here
-	if len(city) < 2 {
-		return fmt.Errorf("city name too short")
-	}
-	
-	return nil
+	// You can also read from a config file here
+	return "your_api_key_here" // Default fallback
 }
