@@ -1,37 +1,44 @@
 package main
 
-const (
-	// WeatherAPI configuration
-	WeatherAPIBaseURL = "http://api.weatherapi.com/v1"
-	DefaultDays       = 3
-	
-	// Visualization settings
-	MaxChartWidth    = 50
-	TempScaleOffset  = 10 // For handling negative temperatures in visualization
+import (
+	"encoding/json"
+	"os"
 )
 
 type Config struct {
-	APIKey     string
-	Days       int
-	Units      string // "metric" or "imperial"
-	EnableCache bool
+	APIKey string `json:"api_key"`
+	Units  string `json:"units"`
+	City   string `json:"default_city"`
 }
 
-func NewConfig() *Config {
-	return &Config{
-		APIKey:     getAPIKey(),
-		Days:       DefaultDays,
-		Units:      "metric",
-		EnableCache: true,
-	}
-}
-
-func getAPIKey() string {
-	// First try environment variable
-	if apiKey := os.Getenv("WEATHER_API_KEY"); apiKey != "" {
-		return apiKey
-	}
+func loadConfig() (Config, error) {
+	var config Config
 	
-	// You can also read from a config file here
-	return "your_api_key_here" // Default fallback
+	// Check if config file exists
+	if _, err := os.Stat("config.json"); os.IsNotExist(err) {
+		return config, err
+	}
+
+	file, err := os.ReadFile("config.json")
+	if err != nil {
+		return config, err
+	}
+
+	err = json.Unmarshal(file, &config)
+	return config, err
+}
+
+func createDefaultConfig() error {
+	config := Config{
+		APIKey: "YOUR_API_KEY_HERE",
+		Units:  "metric",
+		City:   "London",
+	}
+
+	file, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile("config.json", file, 0644)
 }
