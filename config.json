@@ -1,5 +1,5 @@
 {
   "api_key": "YOUR_API_KEY_HERE",
-  "city": "London",
-  "units": "metric"
+  "units": "metric",
+  "default_city": "London"
 }
