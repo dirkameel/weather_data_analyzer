@@ -1,100 +1,141 @@
-## Weather Data Analyzer
+# 🌤️ Weather Data Analyzer
 
-A simple Go application that fetches and analyzes weather data with temperature trend visualization.
+A simple Go application that fetches and analyzes weather data from WeatherAPI with temperature trends visualization.
 
-### Features
+## Features
 
-- 🌡️ Current weather information
-- 📈 3-day temperature forecasts
-- 📊 ASCII-based temperature visualization
-- 🔍 Temperature trend analysis
-- 🌍 Multi-location support
+- 📍 **Current weather display** with temperature, humidity, wind, and conditions
+- 📈 **7-day forecast** with detailed temperature analysis
+- 📊 **Statistical analysis** including averages, extremes, and trends
+- 🎯 **Visual temperature trends** with ASCII chart visualization
+- ⚙️ **Configurable** with support for multiple locations
 
-### Prerequisites
+## Prerequisites
 
-1. Go 1.16 or higher
-2. WeatherAPI.com account (free tier available)
+- Go 1.21 or later
+- WeatherAPI account (free tier available)
 
-### Setup
+## Setup
 
-1. **Get API Key:**
+1. **Get API Key**:
    - Sign up at [WeatherAPI.com](https://www.weatherapi.com/)
    - Get your free API key
 
-2. **Configure API Key:**
-   ```bash
-   # Option 1: Set environment variable
-   export WEATHER_API_KEY="your_actual_api_key_here"
-   
-   # Option 2: Update config.go file
-   # Change the default API key in config.go
-   ```
+2. **Configure API Key**:
+   - Option 1: Set environment variable:
+     ```bash
+     export WEATHER_API_KEY="your_api_key_here"
+     ```
+   - Option 2: Edit `config.json`:
+     ```json
+     {
+       "api_key": "your_actual_api_key_here",
+       "units": "metric",
+       "default_city": "London"
+     }
+     ```
 
-3. **Install Dependencies:**
+3. **Install Dependencies**:
    ```bash
-   go mod init weather-analyzer
    go mod tidy
    ```
 
-### Usage
+## Usage
 
+### Basic Usage
 ```bash
-# Basic usage
-go run main.go London
-
-# Multiple cities
-go run main.go "New York"
-go run main.go Tokyo
-go run main.go "Rio de Janeiro"
+go run main.go analyzer.go config.go
 ```
 
-### Example Output
+### Specify Location
+```bash
+# As command line argument
+go run . "New York"
 
-```
-=== CURRENT WEATHER ===
-Location: London, United Kingdom
-Temperature: 15.5°C (Feels like: 14.2°C)
-Condition: Partly cloudy
-Humidity: 65%
-Wind: 12.3 km/h
-
-=== TEMPERATURE TRENDS (3-Day Forecast) ===
-Monday (2024-01-15):
-  Max: 16.2°C | Min: 8.5°C | Avg: 12.3°C
-  Trend: warming (Δ1.2°C)
-
-=== TEMPERATURE VISUALIZATION ===
-Mon:  12.3°C [          ▀▀▀▀▀] (8.5°C - 16.2°C)
-Tue:  13.5°C [           ▀▀▀▀▀▀] (9.1°C - 17.8°C)
-Wed:  14.2°C [            ▀▀▀▀▀▀▀] (10.2°C - 18.5°C)
+# Or as interactive input
+go run .
+# Then enter location when prompted
 ```
 
-### Project Structure
+### Examples
+```bash
+# Different cities
+go run . "Tokyo"
+go run . "Paris"
+go run . "Sydney"
 
-- `main.go` - Main application logic and weather data fetching
-- `config.go` - Configuration settings and API management
-- `utils.go` - Utility functions for analysis and visualization
-- `go.mod` - Go module definition
+# Cities with spaces
+go run . "New York"
+go run . "Mexico City"
+```
 
-### API Notes
+## Output Example
 
-- Uses WeatherAPI.com (free tier: 1M calls/month)
-- Provides current weather + 3-day forecast
-- Data includes temperature, humidity, wind, and conditions
+```
+🌤️  Weather Data Analyzer
+==========================
+Enter location (or press Enter for London): Tokyo
 
-### Customization
+📍 Current Weather in Tokyo, Japan
+====================================
+🌡️  Temperature: 15.2°C (Feels like: 14.8°C)
+☁️  Condition: Partly cloudy
+💧 Humidity: 65%
+💨 Wind: 12.3 km/h
+
+📈 7-Day Temperature Trends for Tokyo
+====================================
+Monday: Max: 16.5°C, Min: 8.2°C, Avg: 12.3°C
+Tuesday: Max: 17.1°C, Min: 9.1°C, Avg: 13.1°C
+...
+
+📊 Temperature Statistics:
+Average High: 16.8°C
+Average Low: 9.5°C
+Overall Average: 13.2°C
+Temperature Range: 8.9°C
+Highest Temp: 18.3°C
+Lowest Temp: 7.4°C
+Trend: Warming trend
+
+📊 Temperature Visualization
+============================
+Mon: ─────────────❄─────────────────────────────●────────────🔥 Max:16.5°C
+                Min:8.2°C
+...
+```
+
+## File Structure
+
+```
+weather-analyzer/
+├── main.go          # Main application entry point
+├── analyzer.go      # Weather analysis and visualization logic
+├── config.go        # Configuration management
+├── config.json      # API configuration file
+└── go.mod          # Go module definition
+```
+
+## API Rate Limits
+
+- Free tier: 1,000,000 calls per month
+- 1 call per location per execution
+- Suitable for personal use and testing
+
+## Error Handling
+
+- Invalid API keys
+- Network connectivity issues
+- Invalid location names
+- API rate limiting
+
+## Customization
 
 You can modify:
-- Number of forecast days in `config.go`
-- Temperature units (metric/imperial)
-- Visualization style in `utils.go`
-- Add more weather parameters as needed
+- Forecast days in `main.go` (change `&days=7`)
+- Temperature units in `config.json`
+- Visualization width in `analyzer.go`
 
-### Error Handling
+## License
 
-- Handles API connection errors
-- Validates city names
-- Manages missing API keys
-- Graceful degradation for visualization
-
-This provides a solid foundation for weather data analysis that you can extend with additional features like historical data, multiple locations comparison, or more sophisticated visualizations.
+MIT License - Feel free to modify and distribute.
